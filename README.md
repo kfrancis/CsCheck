@@ -27,6 +27,7 @@ CsCheck also has functionality to make multiple types of testing simple and fast
 - [Causal profiling](#Causal-profiling)
 - [Regression testing](#Regression-testing)
 - [Performance testing](#Performance-testing)
+- [Equality testing](#Equality-testing)
 - [Debug utilities](#Debug-utilities)
 - [Configuration](#Configuration)
 - [Development](#Development)
@@ -504,6 +505,44 @@ public void Varint_Faster()
 Tests.ArraySerializerTests.Varint_Faster [45 ms]
 Standard Output Messages:
 10.94%[-3.27%..25.81%] 1.12x[0.97x..1.35x] faster, sigma = 10.0 (442 vs 190), min = 7.082ns vs 7.332ns
+```
+
+## Equality testing
+
+Equality checks that a type's `Equals`, `IEquatable<T>` and `GetHashCode` are consistent for generated values: equal values compare equal both ways and share a hash code, while unequal values disagree.
+
+You can also declare the fields in the equality contract. **Compared** fields must change equality; **Ignored** fields must not. CsCheck also checks completeness: if an undeclared field affects equality, it fails.
+
+Setters can be record `with` expressions or in-place `Action`s. For declared fields, failure messages use the setter expression name. For normalized equality (rounding, tolerance, case), use a matching `IEqualityComparer` (or a generator that still produces distinct values after setting).
+
+You can pass an `IEqualityComparer<T>` as the first argument to test a comparer directly instead of the type's own equality.
+
+### Account Equality
+```csharp
+[Test]
+public void Equality_Int()
+{
+    Check.Equality(Gen.Int);
+}
+
+record Account(int Id, string Note) // equality is on Id only, Note is ignored
+{
+    public virtual bool Equals(Account? other) => other is not null && Id == other.Id;
+    public override int GetHashCode() => Id.GetHashCode();
+}
+
+[Test]
+public void Equality_Fields()
+{
+    var gen =
+        from id in Gen.Int
+        from note in Gen.String
+        select new Account(id, note);
+    gen.Equality(f => f
+        .Compared((a, v) => a with { Id = v }, Gen.Int)
+        .Ignored((a, v) => a with { Note = v }, Gen.String)
+    );
+}
 ```
 
 ## Debug utilities
