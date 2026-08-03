@@ -565,8 +565,6 @@ public void Equality_Fields_Union()
 }
 ```
 
-When the arms are not subtypes of the sum type (for example a C# `union` whose members are distinct types) use the four-argument `Case(isCase, down, up, armFields)` overload, supplying a predicate and the projections to and from the arm payload. For a record whose field is itself a union or record, use `Union(down, up, fieldFields)` to descend into that field and declare its cases and/or fields. When that field is a subtype-sum, the fluent `Union(down, up).Case<TArm>(...)` builder is compile-time constrained so only real arms (`TArm : TField`) can be declared.
-
 ## Debug utilities
 
 The Dbg module is a set of utilities to collect, count and output debug info, time, classify generators, define and remotely call functions, and perform in code regression during testing.
