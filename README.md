@@ -517,14 +517,9 @@ Setters can be record `with` expressions or in-place `Action`s. For declared fie
 
 You can pass an `IEqualityComparer<T>` as the first argument to test a comparer directly instead of the type's own equality.
 
-### Account Equality
-```csharp
-[Test]
-public void Equality_Int()
-{
-    Check.Equality(Gen.Int);
-}
+For unions declare each arm with `Case`. An arm's compared/ignored fields are declared against the arm payload and are only exercised on instances of that case; instances of different cases are additionally checked to compare unequal (the case discriminant is part of equality). Cases can be nested to test nested union types.
 
+```csharp
 record Account(int Id, string Note) // equality is on Id only, Note is ignored
 {
     public virtual bool Equals(Account? other) => other is not null && Id == other.Id;
@@ -543,7 +538,34 @@ public void Equality_Fields()
         .Ignored((a, v) => a with { Note = v }, Gen.String)
     );
 }
+
+sealed record Cat(string Name, int Whiskers)
+{
+    public bool Equals(Cat? other) => other is not null && Name == other.Name; // Whiskers ignored
+    public override int GetHashCode() => Name.GetHashCode();
+}
+
+sealed record Dog(string Name, string Breed);
+
+readonly union Pet(Cat, Dog);
+
+[Test]
+public void Equality_Fields_Union()
+{
+    Gen.OneOf(
+        Gen.Select(Gen.String, Gen.Int, (name, whiskers) => new Pet(new Cat(name, whiskers))),
+        Gen.Select(Gen.String, Gen.String, (name, breed) => new Pet(new Dog(name, breed))))
+    .Equality(f => f
+        .Case<Cat>(cf => cf
+            .Compared((c, s) => c with { Name = s }, Gen.String)
+            .Ignored((c, w) => c with { Whiskers = w }, Gen.Int))
+        .Case<Dog>(df => df
+            .Compared((d, s) => d with { Name = s }, Gen.String)
+            .Compared((d, b) => d with { Breed = b }, Gen.String)));
+}
 ```
+
+When the arms are not subtypes of the sum type (for example a C# `union` whose members are distinct types) use the four-argument `Case(isCase, down, up, armFields)` overload, supplying a predicate and the projections to and from the arm payload. For a record whose field is itself a union or record, use `Union(down, up, fieldFields)` to descend into that field and declare its cases and/or fields. When that field is a subtype-sum, the fluent `Union(down, up).Case<TArm>(...)` builder is compile-time constrained so only real arms (`TArm : TField`) can be declared.
 
 ## Debug utilities
 
@@ -670,15 +692,15 @@ replay - The number of times to retry the seed to reproduce a SampleParallel fai
 Global defaults can also be set via environment variables:
 
 ```powershell
-$env:CsCheck_Iter=10000;dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/GenTests/*;rm env:CsCheck*
+dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/GenTests/* -e CsCheck_Iter=10000
 
-$env:CsCheck_Time=10;dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/FloatingPointTests/*;rm env:CsCheck*
+dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/FloatingPointTests/* -e CsCheck_Time=10
 
-$env:CsCheck_Seed="0N0XIzNsQ0O2";dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/*/NSum_Shuffle_Check;rm env:CsCheck*
+dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/*/NSum_Shuffle_Check -e CsCheck_Seed="0N0XIzNsQ0O2"
 
-$env:CsCheck_Sigma=50;dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/*/*_Faster;rm env:CsCheck*
+dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/*/*_Faster -e CsCheck_Sigma=50
 
-$env:CsCheck_Threads=1;dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/*/*_Perf;rm env:CsCheck*
+dotnet run -c Release --project Tests --no-restore --disable-logo --output Detailed --treenode-filter /*/*/*/*_Perf -e CsCheck_Threads=1
 ```
 
 ## Development
